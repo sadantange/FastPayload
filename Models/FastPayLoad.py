@@ -7,12 +7,7 @@ from ModelBlock import CBAMBlock
 from ModelBlock import SEBlock
 from ModelBlock import ECABlock
 
-class LayerNorm(nn.Module):
-    r""" LayerNorm that supports two data formats: channels_last (default) or channels_first. 
-    The ordering of the dimensions in the inputs. channels_last corresponds to inputs with 
-    shape (batch_size, height, width, channels) while channels_first corresponds to inputs 
-    with shape (batch_size, channels, height, width).
-    """
+class InstanceNorm(nn.Module):
     def __init__(self, normalized_shape, eps=1e-5, data_format="channels_last"):
         super().__init__()
         self.weight = nn.Parameter(torch.ones(normalized_shape))
@@ -37,14 +32,14 @@ class Block(nn.Module):
     def __init__(self, dim, ks, factor):
         super().__init__()
         self.dwconv = nn.Conv1d(dim, dim, kernel_size=ks, padding='same', groups=dim) # depthwise conv
-        self.norm = LayerNorm(dim)
+        self.norm = InstanceNorm(dim)
         self.pwconv1 = nn.Linear(dim, factor * dim) # pointwise/1x1 convs, implemented with linear layers
         self.act = nn.ReLU()
         self.pwconv2 = nn.Linear(factor * dim, dim)
-        self.gc = GCBlock(dim)
-        # self.gc =CBAMBlock(dim)
-        # self.gc = SEBlock(dim)
-        # self.gc = ECABlock(dim)
+        self.att = GCBlock(dim)
+        # self.att =CBAMBlock(dim)
+        # self.att = SEBlock(dim)
+        # self.att = ECABlock(dim)
     def forward(self, x):
         input = x
         x = self.dwconv(x)
@@ -54,7 +49,7 @@ class Block(nn.Module):
         x = self.act(x)
         x = self.pwconv2(x)
         x = x.permute(0, 2, 1) # (N, L, C) -> (N, C, L)
-        x = self.gc(x)
+        x = self.att(x)
         x = input + x
         return x
 
@@ -69,13 +64,12 @@ class IDCNN(nn.Module):
                 kernel_size=4,
                 stride=4
             ),
-            LayerNorm(dims[0], data_format="channels_first")
-            # nn.LayerNorm([dims[0], 375])
+            InstanceNorm(dims[0], data_format="channels_first")
         )
         self.downsample_layers.append(stem)
         for i in range(3):
             downsample_layer = nn.Sequential(
-                LayerNorm(dims[i], eps=1e-5, data_format="channels_first"),
+                InstanceNorm(dims[i], eps=1e-5, data_format="channels_first"),
                 nn.Conv1d(dims[i], dims[i+1], kernel_size=4, stride=4),
             )
             self.downsample_layers.append(downsample_layer)

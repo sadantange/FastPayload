@@ -28,12 +28,7 @@ class DEPTHWISECONV(nn.Module):
         out = self.point_conv(out)
         return out
 
-class LayerNorm(nn.Module):
-    r""" LayerNorm that supports two data formats: channels_last (default) or channels_first. 
-    The ordering of the dimensions in the inputs. channels_last corresponds to inputs with 
-    shape (batch_size, height, width, channels) while channels_first corresponds to inputs 
-    with shape (batch_size, channels, height, width).
-    """
+class InstanceNorm(nn.Module):
     def __init__(self, normalized_shape, eps=1e-5, data_format="channels_last"):
         super().__init__()
         self.weight = nn.Parameter(torch.ones(normalized_shape))
@@ -58,7 +53,7 @@ class Block(nn.Module):
     def __init__(self, dim, ks, factor):
         super().__init__()
         self.dwconv = nn.Conv1d(factor * dim,  factor * dim, kernel_size=ks, padding='same', groups=dim) # depthwise conv
-        self.norm = LayerNorm(factor * dim, data_format="channels_first")
+        self.norm = InstanceNorm(factor * dim, data_format="channels_first")
         self.pwconv1 = nn.Conv1d(dim, factor * dim, kernel_size=1)
         self.act = nn.ReLU()
         self.pwconv2 = nn.Conv1d(factor * dim, dim, kernel_size=1)
@@ -85,13 +80,12 @@ class IDCNN(nn.Module):
                 kernel_size=4,
                 stride=4
             ),
-            LayerNorm(dims[0], data_format="channels_first")
-            # nn.LayerNorm([dims[0], 375])
+            InstanceNorm(dims[0], data_format="channels_first")
         )
         self.downsample_layers.append(stem)
         for i in range(3):
             downsample_layer = nn.Sequential(
-                LayerNorm(dims[i], eps=1e-5, data_format="channels_first"),
+                InstanceNorm(dims[i], eps=1e-5, data_format="channels_first"),
                 nn.Conv1d(dims[i], dims[i+1], kernel_size=4, stride=4),
             )
             self.downsample_layers.append(downsample_layer)
